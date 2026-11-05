@@ -1,4 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_login import (
+    LoginManager, UserMixin, login_user, logout_user,
+    login_required, current_user,
+)
+from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import sqlite3
@@ -8,6 +13,16 @@ app = Flask(__name__)
 app.secret_key = "doi-chuoi-nay-khi-trien-khai-that"
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "qlsv.db")
+
+# ---------- Flask-Login: quản lý đăng nhập ----------
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+login_manager.login_message = "Vui lòng đăng nhập để tiếp tục!"
+login_manager.login_message_category = "error"
+
+# ---------- Flask-WTF: chống tấn công CSRF cho mọi form POST ----------
+csrf = CSRFProtect(app)
 
 
 # ---------- Kết nối & khởi tạo database ----------
@@ -58,7 +73,6 @@ def init_db():
     """)
     conn.commit()
 
-    # Tài khoản giảng viên mặc định (chỉ tạo nếu chưa có)
     gv = conn.execute("SELECT id FROM users WHERE username = 'giangvien'").fetchone()
     if not gv:
         conn.execute(
@@ -66,7 +80,6 @@ def init_db():
             ("giangvien", generate_password_hash("giangvien123")),
         )
 
-    # Vài môn học mẫu cho dễ test
     so_mon = conn.execute("SELECT COUNT(*) AS c FROM subjects").fetchone()["c"]
     if so_mon == 0:
         mon_hoc_mau = [
@@ -85,22 +98,29 @@ def init_db():
     conn.close()
 
 
-# ---------- Decorator kiểm tra đăng nhập / phân quyền ----------
-def login_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if "user_id" not in session:
-            flash("Vui lòng đăng nhập!", "error")
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return wrapper
+# ---------- Model User cho Flask-Login ----------
+class User(UserMixin):
+    def __init__(self, row):
+        self.id = str(row["id"])
+        self.username = row["username"]
+        self.role = row["role"]
 
 
+@login_manager.user_loader
+def load_user(user_id):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    conn.close()
+    return User(row) if row else None
+
+
+# ---------- Decorator kiểm tra vai trò (chạy sau khi đã đăng nhập) ----------
 def role_required(role):
     def decorator(f):
         @wraps(f)
+        @login_required
         def wrapper(*args, **kwargs):
-            if session.get("role") != role:
+            if current_user.role != role:
                 flash("Bạn không có quyền truy cập trang này!", "error")
                 return redirect(url_for("index"))
             return f(*args, **kwargs)
@@ -111,16 +131,17 @@ def role_required(role):
 # ---------- Đăng nhập / Đăng xuất ----------
 @app.route("/dang-nhap", methods=["GET", "POST"])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
     if request.method == "POST":
         username = request.form["username"].strip()
         password = request.form["password"]
         conn = get_db()
-        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         conn.close()
-        if user and check_password_hash(user["password_hash"], password):
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
-            session["role"] = user["role"]
+        if row and check_password_hash(row["password_hash"], password):
+            login_user(User(row))
             flash(f"Xin chào {username}!", "success")
             return redirect(url_for("index"))
         flash("Sai tên đăng nhập hoặc mật khẩu!", "error")
@@ -128,8 +149,9 @@ def login():
 
 
 @app.route("/dang-xuat")
+@login_required
 def logout():
-    session.clear()
+    logout_user()
     flash("Đã đăng xuất.", "success")
     return redirect(url_for("login"))
 
@@ -137,7 +159,7 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    if session["role"] == "giangvien":
+    if current_user.role == "giangvien":
         return redirect(url_for("gv_dashboard"))
     return redirect(url_for("sv_dashboard"))
 
@@ -146,7 +168,6 @@ def index():
 # ==================  PHẦN GIẢNG VIÊN  ====================
 # =========================================================
 @app.route("/giangvien")
-@login_required
 @role_required("giangvien")
 def gv_dashboard():
     conn = get_db()
@@ -171,7 +192,6 @@ def gv_dashboard():
 
 
 @app.route("/giangvien/sinh-vien")
-@login_required
 @role_required("giangvien")
 def gv_students():
     keyword = request.args.get("q", "").strip()
@@ -188,7 +208,6 @@ def gv_students():
 
 
 @app.route("/giangvien/sinh-vien/them", methods=["GET", "POST"])
-@login_required
 @role_required("giangvien")
 def gv_add_student():
     if request.method == "POST":
@@ -204,7 +223,6 @@ def gv_add_student():
 
         conn = get_db()
         try:
-            # Tạo luôn tài khoản đăng nhập cho sinh viên, mật khẩu mặc định = MSSV
             cur = conn.execute(
                 "INSERT INTO users (username, password_hash, role) VALUES (?, ?, 'sinhvien')",
                 (mssv, generate_password_hash(mssv)),
@@ -227,7 +245,6 @@ def gv_add_student():
 
 
 @app.route("/giangvien/sinh-vien/sua/<int:student_id>", methods=["GET", "POST"])
-@login_required
 @role_required("giangvien")
 def gv_edit_student(student_id):
     conn = get_db()
@@ -254,7 +271,6 @@ def gv_edit_student(student_id):
 
 
 @app.route("/giangvien/sinh-vien/xoa/<int:student_id>")
-@login_required
 @role_required("giangvien")
 def gv_delete_student(student_id):
     conn = get_db()
@@ -271,7 +287,6 @@ def gv_delete_student(student_id):
 
 # ---------- Quản lý môn học ----------
 @app.route("/giangvien/mon-hoc", methods=["GET", "POST"])
-@login_required
 @role_required("giangvien")
 def gv_subjects():
     conn = get_db()
@@ -294,7 +309,6 @@ def gv_subjects():
 
 
 @app.route("/giangvien/mon-hoc/xoa/<int:subject_id>")
-@login_required
 @role_required("giangvien")
 def gv_delete_subject(subject_id):
     conn = get_db()
@@ -307,7 +321,6 @@ def gv_delete_subject(subject_id):
 
 # ---------- Nhập điểm cho sinh viên ----------
 @app.route("/giangvien/diem/<int:student_id>", methods=["GET", "POST"])
-@login_required
 @role_required("giangvien")
 def gv_grades(student_id):
     conn = get_db()
@@ -329,7 +342,6 @@ def gv_grades(student_id):
             conn.close()
             return redirect(url_for("gv_grades", student_id=student_id))
 
-        # Nếu môn đã có điểm thì cập nhật, chưa có thì thêm mới
         conn.execute("""
             INSERT INTO grades (student_id, subject_id, diem) VALUES (?, ?, ?)
             ON CONFLICT(student_id, subject_id) DO UPDATE SET diem = excluded.diem
@@ -361,7 +373,6 @@ def gv_grades(student_id):
 
 
 @app.route("/giangvien/diem/xoa/<int:grade_id>/<int:student_id>")
-@login_required
 @role_required("giangvien")
 def gv_delete_grade(grade_id, student_id):
     conn = get_db()
@@ -376,12 +387,11 @@ def gv_delete_grade(grade_id, student_id):
 # ===================  PHẦN SINH VIÊN  ====================
 # =========================================================
 @app.route("/sinh-vien")
-@login_required
 @role_required("sinhvien")
 def sv_dashboard():
     conn = get_db()
     student = conn.execute(
-        "SELECT * FROM students WHERE user_id=?", (session["user_id"],)
+        "SELECT * FROM students WHERE user_id=?", (int(current_user.id),)
     ).fetchone()
     if student is None:
         conn.close()

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3">Hồ sơ của tôi</h2>
+
+<div class="card shadow-sm mb-4" style="max-width:450px;">
+<div class="card-body">
+    <p><b>MSSV:</b> {{ student.mssv }}</p>
+    <p><b>Họ tên:</b> {{ student.name }}</p>
+    <p><b>Ngày sinh:</b> {{ student.birthday or "—" }}</p>
+    <p><b>Giới tính:</b> {{ student.gender or "—" }}</p>
+    <p class="mb-0"><b>Lớp:</b> {{ student.class_name or "—" }}</p>
+</div>
+</div>
+
+<h4 class="mb-3">Bảng điểm</h4>
+<div class="card shadow-sm mb-3">
+<table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>Môn học</th><th>Tín chỉ</th><th>Điểm</th></tr></thead>
+    <tbody>
+        {% for d in diem_list %}
+        <tr><td>{{ d.ten_mon }}</td><td>{{ d.so_tin_chi }}</td><td>{{ d.diem }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-muted py-4">Chưa có điểm. Liên hệ giảng viên để được nhập điểm.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div class="alert alert-info d-inline-block">GPA (tính theo tín chỉ): <b>{{ gpa if gpa is not none else "—" }}</b></div>
+{% endblock %}
