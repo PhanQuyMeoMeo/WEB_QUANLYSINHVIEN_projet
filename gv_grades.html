@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3">Bảng điểm — {{ student.name }} ({{ student.mssv }})</h2>
+
+<div class="card shadow-sm mb-4">
+<div class="card-body">
+<form method="post" class="row g-2 align-items-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-6">
+        <label class="form-label">Môn học</label>
+        <select name="subject_id" class="form-select" required>
+            {% for m in subjects %}
+            <option value="{{ m.id }}">{{ m.ten_mon }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Điểm (0–10)</label>
+        <input type="number" step="0.1" min="0" max="10" name="diem" class="form-control" required>
+    </div>
+    <div class="col-md-3">
+        <button type="submit" class="btn btn-primary w-100">Lưu điểm</button>
+    </div>
+</form>
+</div>
+</div>
+
+<div class="card shadow-sm mb-3">
+<table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>Môn học</th><th>Tín chỉ</th><th>Điểm</th><th>Thao tác</th></tr></thead>
+    <tbody>
+        {% for d in diem_list %}
+        <tr>
+            <td>{{ d.ten_mon }}</td>
+            <td>{{ d.so_tin_chi }}</td>
+            <td>{{ d.diem }}</td>
+            <td>
+                <a href="{{ url_for('gv_delete_grade', grade_id=d.id, student_id=student.id) }}"
+                   class="btn btn-sm btn-danger" onclick="return confirm('Xóa điểm môn {{ d.ten_mon }}?');">Xóa</a>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted py-4">Chưa có điểm.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<div class="alert alert-info d-inline-block">GPA (tính theo tín chỉ): <b>{{ gpa if gpa is not none else "—" }}</b></div>
+<div>
+    <a href="{{ url_for('gv_students') }}" class="btn btn-outline-secondary mt-2">← Quay lại danh sách</a>
+</div>
+{% endblock %}

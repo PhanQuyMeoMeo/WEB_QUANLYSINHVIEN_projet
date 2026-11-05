@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-3">{{ action }} sinh viên</h2>
+<div class="card shadow-sm" style="max-width:500px;">
+<div class="card-body">
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label class="form-label">MSSV</label>
+        <input type="text" name="mssv" class="form-control" value="{{ student.mssv if student else '' }}"
+               required {% if student %}readonly{% endif %}>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Họ tên</label>
+        <input type="text" name="name" class="form-control" value="{{ student.name if student else '' }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Ngày sinh</label>
+        <input type="date" name="birthday" class="form-control" value="{{ student.birthday if student else '' }}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Giới tính</label>
+        <select name="gender" class="form-select">
+            <option value="Nam" {% if student and student.gender == 'Nam' %}selected{% endif %}>Nam</option>
+            <option value="Nữ" {% if student and student.gender == 'Nữ' %}selected{% endif %}>Nữ</option>
+            <option value="Khác" {% if student and student.gender == 'Khác' %}selected{% endif %}>Khác</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Lớp</label>
+        <input type="text" name="class_name" class="form-control" value="{{ student.class_name if student else '' }}">
+    </div>
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Lưu</button>
+        <a href="{{ url_for('gv_students') }}" class="btn btn-outline-secondary">Hủy</a>
+    </div>
+</form>
+</div>
+</div>
+{% endblock %}

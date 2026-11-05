@@ -1,0 +1,11 @@
+/* Các tinh chỉnh nhỏ bổ sung cho Bootstrap 5 */
+
+body {
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.navbar-brand { font-size: 20px; }
+
+table td, table th {
+    vertical-align: middle;
+}
